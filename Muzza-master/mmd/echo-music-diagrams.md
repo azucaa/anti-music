@@ -1,0 +1,652 @@
+# Echo Music - Diagram Arsitektur & Visualisasi
+
+## 1. Application Architecture Overview
+
+```
+┌──────────────────────────────────────────────────────────────────┐
+│                    PRESENTATION LAYER                            │
+│  ┌──────────────────────────────────────────────────────────┐   │
+│  │           UI (Jetpack Compose)                           │   │
+│  │  ┌─────────────┐  ┌──────────────┐  ┌──────────────┐   │   │
+│  │  │  Home Screen│  │Player Screen │  │ Queue Screen │   │   │
+│  │  └─────────────┘  └──────────────┘  └──────────────┘   │   │
+│  │  ┌──────────────┐  ┌──────────────┐                    │   │
+│  │  │Lyrics Screen │  │Search Screen │                    │   │
+│  │  └──────────────┘  └──────────────┘                    │   │
+│  └──────────────────────────────────────────────────────────┘   │
+│                             ↓                                     │
+│  ┌──────────────────────────────────────────────────────────┐   │
+│  │         STATE MANAGEMENT (MVVM)                          │   │
+│  │  ┌─────────────┐  ┌──────────────┐  ┌──────────────┐   │   │
+│  │  │HomeViewModel│  │PlayerViewModel│  │QueueViewModel│  │   │
+│  │  └─────────────┘  └──────────────┘  └──────────────┘   │   │
+│  │  StateFlow, MutableStateFlow, SharedFlow                │   │
+│  └──────────────────────────────────────────────────────────┘   │
+└──────────────────────────────────────────────────────────────────┘
+                             ↓
+┌──────────────────────────────────────────────────────────────────┐
+│                     DOMAIN LAYER                                  │
+│  ┌──────────────────────────────────────────────────────────┐   │
+│  │    Use Cases & Business Logic                            │   │
+│  │  • GetHomeContentUseCase                                 │   │
+│  │  • PlaySongUseCase                                       │   │
+│  │  • GetSyncedLyricsUseCase                                │   │
+│  │  • GetQueueUseCase                                       │   │
+│  │  • GetQuickPicksUseCase                                  │   │
+│  └──────────────────────────────────────────────────────────┘   │
+│  ┌──────────────────────────────────────────────────────────┐   │
+│  │    Domain Models                                          │   │
+│  │  • Song, Album, Playlist, Artist                         │   │
+│  │  • Lyrics, LyricLine, LyricWord                          │   │
+│  │  • Queue, PlaybackState                                  │   │
+│  └──────────────────────────────────────────────────────────┘   │
+└──────────────────────────────────────────────────────────────────┘
+                             ↓
+┌──────────────────────────────────────────────────────────────────┐
+│                     DATA LAYER                                    │
+│  ┌──────────────────────────────────────────────────────────┐   │
+│  │    Repositories (Abstraction)                            │   │
+│  │  • HomeRepository                                        │   │
+│  │  • PlaylistRepository                                    │   │
+│  │  • LyricsRepository                                      │   │
+│  │  • PlayerRepository                                      │   │
+│  └──────────────────────────────────────────────────────────┘   │
+│                             ↓                                     │
+│  ┌──────────────────────────────────────────────────────────┐   │
+│  │    Data Sources                                           │   │
+│  │  ┌────────────────┐      ┌──────────────────┐           │   │
+│  │  │  Local Sources │      │  Remote Sources  │           │   │
+│  │  ├────────────────┤      ├──────────────────┤           │   │
+│  │  │• Room Database │      │• InnerTube API   │           │   │
+│  │  │• SharedPrefs   │      │• Better Lyrics   │           │   │
+│  │  │• File System   │      │• Spotify API     │           │   │
+│  │  │• Cache         │      │• Google Translate│           │   │
+│  │  └────────────────┘      └──────────────────┘           │   │
+│  └──────────────────────────────────────────────────────────┘   │
+└──────────────────────────────────────────────────────────────────┘
+                             ↓
+┌──────────────────────────────────────────────────────────────────┐
+│                  EXTERNAL SERVICES                               │
+│  ┌──────────────┐  ┌──────────────┐  ┌──────────────┐          │
+│  │YouTube Music │  │Better Lyrics │  │ Spotify API  │          │
+│  │ InnerTube    │  │ API          │  │              │          │
+│  └──────────────┘  └──────────────┘  └──────────────┘          │
+│  ┌──────────────────┐                                          │
+│  │Google Translate  │                                          │
+│  │Firebase          │                                          │
+│  └──────────────────┘                                          │
+└──────────────────────────────────────────────────────────────────┘
+```
+
+---
+
+## 2. Music Streaming Pipeline
+
+```
+┌─────────────────────┐
+│  User Search/Browse │
+└──────────┬──────────┘
+           │
+           ↓
+┌─────────────────────────────────────┐
+│  InnerTube API Request              │
+│  ┌──────────────────────────────┐   │
+│  │ POST /youtubei/v1/search     │   │
+│  │ Query: "song_name"           │   │
+│  └──────────────────────────────┘   │
+└──────────┬──────────────────────────┘
+           │
+           ↓
+┌─────────────────────────────────────┐
+│  Response Parsing                   │
+│  ┌──────────────────────────────┐   │
+│  │ {                             │   │
+│  │   videoId: "xxx",             │   │
+│  │   title: "Song Name",          │   │
+│  │   artist: "Artist",            │   │
+│  │   duration: 180000             │   │
+│  │ }                              │   │
+│  └──────────────────────────────┘   │
+└──────────┬──────────────────────────┘
+           │
+           ↓
+┌─────────────────────────────────────┐
+│  Get Streaming URL                  │
+│  ┌──────────────────────────────┐   │
+│  │ InnerTube API                 │   │
+│  │ Get format=audio/mp4          │   │
+│  │ Extract playback URL          │   │
+│  └──────────────────────────────┘   │
+└──────────┬──────────────────────────┘
+           │
+           ↓
+┌─────────────────────────────────────┐
+│  ExoPlayer (Media3) Initialization  │
+│  ┌──────────────────────────────┐   │
+│  │ Create MediaItem              │   │
+│  │ Set URI = playback URL        │   │
+│  │ Set metadata (title, artist)  │   │
+│  └──────────────────────────────┘   │
+└──────────┬──────────────────────────┘
+           │
+           ↓
+┌─────────────────────────────────────┐
+│  Audio Playback                     │
+│  ┌──────────────────────────────┐   │
+│  │ Download → Decode → Play      │   │
+│  │ Output: Device Speakers       │   │
+│  │ Emit state updates            │   │
+│  └──────────────────────────────┘   │
+└──────────┬──────────────────────────┘
+           │
+           ↓
+┌─────────────────────────────────────┐
+│  (Optional) Offline Download        │
+│  ┌──────────────────────────────┐   │
+│  │ Save to: /device/music/      │   │
+│  │ Update Room Database          │   │
+│  │ Store in cache               │   │
+│  └──────────────────────────────┘   │
+└─────────────────────────────────────┘
+```
+
+---
+
+## 3. Lyrics Synchronization Flow
+
+```
+┌──────────────────────────┐
+│   Song Starts Playing    │
+│   Position = 0ms         │
+└──────────┬───────────────┘
+           │
+           ↓
+┌──────────────────────────────────────────┐
+│  Fetch Lyrics                            │
+│  Priority:                               │
+│  1. Better Lyrics API                    │
+│  2. YouTube Music InnerTube              │
+│  3. Lyrics+ Database                     │
+│  4. Fallback: Offline Cache              │
+└──────────┬───────────────────────────────┘
+           │
+           ↓
+┌──────────────────────────────────────────┐
+│  Parse Lyrics Format                     │
+│  ┌──────────────────────────────────┐    │
+│  │ Input (LRC):                      │    │
+│  │ [00:12.00] First lyric line       │    │
+│  │ [00:15.50] Second line            │    │
+│  │                                   │    │
+│  │ Output (Domain Model):            │    │
+│  │ Lyrics {                          │    │
+│  │   lines: [                        │    │
+│  │     {timestamp: 12000, text:...}  │    │
+│  │     {timestamp: 15500, text:...}  │    │
+│  │   ]                               │    │
+│  │ }                                 │    │
+│  └──────────────────────────────────┘    │
+└──────────┬───────────────────────────────┘
+           │
+           ↓
+┌──────────────────────────────────────────┐
+│  Start Sync Loop (Every 50ms)            │
+│  ┌──────────────────────────────────┐    │
+│  │ while (isPlaying) {               │    │
+│  │   currentPos = player.position    │    │
+│  │   lineIndex = findLineIndex(pos)  │    │
+│  │   wordIndex = findWordIndex(pos)  │    │
+│  │   updateUI(lineIndex, wordIndex)  │    │
+│  │   delay(50)                       │    │
+│  │ }                                 │    │
+│  └──────────────────────────────────┘    │
+└──────────┬───────────────────────────────┘
+           │
+           ↓
+┌──────────────────────────────────────────┐
+│  Update UI (Compose Recomposition)       │
+│                                          │
+│  LineIndex = 5 (Current)                 │
+│  ┌──────────────────────────────────┐    │
+│  │ Line 3: [GRAY] Past line         │    │
+│  │ Line 4: [GRAY] Past line         │    │
+│  │ Line 5: [CYAN] Current line ← ← ← ← ← │
+│  │        Word 3 [BRIGHT CYAN]      │    │
+│  │ Line 6: [GRAY] Next line         │    │
+│  │ Line 7: [GRAY] Next line         │    │
+│  └──────────────────────────────────┘    │
+└──────────┬───────────────────────────────┘
+           │
+           ↓
+┌──────────────────────────────────────────┐
+│  (Optional) Translate Lyrics             │
+│  ┌──────────────────────────────────┐    │
+│  │ English: "I love you"             │    │
+│  │      ↓ (Google Translate)        │    │
+│  │ Indonesian: "Aku cinta kamu"      │    │
+│  │      ↓                            │    │
+│  │ Display based on user language    │    │
+│  └──────────────────────────────────┘    │
+└─────────────────────────────────────────┘
+```
+
+---
+
+## 4. Queue Management Architecture
+
+```
+┌────────────────────────────────────┐
+│   User Selects Playlist/Album      │
+└──────────┬───────────────────────────┘
+           │
+           ↓
+┌────────────────────────────────────┐
+│  QueueManager.setQueue(songs)      │
+└──────────┬───────────────────────────┘
+           │
+           ├─────────────────────────────────┐
+           │                                 │
+           ↓                                 ↓
+    ┌─────────────────┐         ┌──────────────────┐
+    │ Update ExoPlayer│         │ Save to Room DB  │
+    │                 │         │                  │
+    │ player.        │         │ INSERT INTO     │
+    │  setMediaItems()│         │   queue_entity   │
+    └────────┬────────┘         └────────┬─────────┘
+             │                          │
+             └───────────────┬──────────┘
+                             │
+                             ↓
+                ┌──────────────────────────┐
+                │   Queue State (MVVM)     │
+                │                          │
+                │ @Entity                  │
+                │ data class QueueEntity {  │
+                │   id: Int                │
+                │   songId: String         │
+                │   position: Int          │
+                │   timestamp: Long        │
+                │ }                        │
+                └────────┬─────────────────┘
+                         │
+        ┌────────────────┼────────────────┐
+        │                │                │
+        ↓                ↓                ↓
+┌─────────────────┐ ┌────────────────┐ ┌──────────────┐
+│ Next Button     │ │ Previous Button│ │ Skip to Pos  │
+│                 │ │                │ │              │
+│ExoPlayer.seekTo│ │ExoPlayer.seekTo│ │ExoPlayer    │
+│  (index+1)      │ │  (index-1)      │ │ .seekTo(i)  │
+└────────┬────────┘ └────────┬───────┘ └──────┬───────┘
+         │                   │                │
+         └───────────────────┼────────────────┘
+                             │
+                             ↓
+            ┌────────────────────────────┐
+            │  Shuffle & Repeat Mode     │
+            │                            │
+            │ SHUFFLE: Randomize queue   │
+            │ REPEAT_ONE: Loop 1 song    │
+            │ REPEAT_ALL: Loop all songs │
+            │ OFF: Sequential play       │
+            └─────────────────────────────┘
+```
+
+---
+
+## 5. Quick Picks Generation Flow
+
+```
+┌──────────────────────────────────┐
+│  User Opens App / Scrolls to      │
+│  Quick Picks Section              │
+└──────────┬───────────────────────┘
+           │
+           ↓
+┌──────────────────────────────────┐
+│  Fetch Recent Play History        │
+│  From Room Database               │
+│  ┌──────────────────────────────┐ │
+│  │ SELECT * FROM songs          │ │
+│  │ WHERE play_time > now()-30d  │ │
+│  │ ORDER BY play_time DESC      │ │
+│  │ LIMIT 100                    │ │
+│  └──────────────────────────────┘ │
+└──────────┬───────────────────────┘
+           │
+           ↓
+┌──────────────────────────────────┐
+│  Analyze User Profile             │
+│  • Genre preferences              │
+│  • Mood affinity                  │
+│  • Time-based preference          │
+│  • Artist affinity                │
+│  • Collaborative filtering        │
+└──────────┬───────────────────────┘
+           │
+           ↓
+┌──────────────────────────────────┐
+│  Fetch from InnerTube API         │
+│  ┌──────────────────────────────┐ │
+│  │ /youtubei/v1/browse          │ │
+│  │ browseId=quick_picks          │ │
+│  │ (Personalized recommendations)│ │
+│  └──────────────────────────────┘ │
+└──────────┬───────────────────────┘
+           │
+           ↓
+┌──────────────────────────────────┐
+│  Local Filtering                  │
+│  • Remove already played          │
+│  • Remove skipped songs           │
+│  • Remove saved to library        │
+│  • Apply genre filter             │
+└──────────┬───────────────────────┘
+           │
+           ↓
+┌──────────────────────────────────┐
+│  Ranking & Prioritization         │
+│  Score = (relevance × 0.5)        │
+│         + (freshness × 0.3)       │
+│         + (popularity × 0.2)      │
+└──────────┬───────────────────────┘
+           │
+           ↓
+┌──────────────────────────────────┐
+│  Cache Results                    │
+│  INSERT INTO quick_picks          │
+│  (auto-expire after 30 min)       │
+└──────────┬───────────────────────┘
+           │
+           ↓
+┌──────────────────────────────────┐
+│  Display in UI                    │
+│  LazyRow with ScrollState         │
+│  Cards: Song + Album Art          │
+│  Click: Play or Add to Queue      │
+└──────────────────────────────────┘
+```
+
+---
+
+## 6. Home Content Load Sequence
+
+```
+Timeline (App Start)
+│
+├─ T=0ms ┌─────────────────────────────────────────┐
+│        │ HomeViewModel.loadHome()                 │
+│        │ (Triggered on app start)                 │
+│        └──────────────────────────────────────────┘
+│
+├─ T=1ms │ Check local cache first
+│        │ ┌─────────────────────────────────────┐
+│        │ │ Room Query:                         │
+│        │ │ SELECT * FROM home_sections         │
+│        │ │ WHERE cache_valid = true            │
+│        │ └─────────────────────────────────────┘
+│        │ ↓
+│        │ IF cached & still valid (< 30 min)
+│        │ → Display immediately (fast!)
+│
+├─ T=2ms │ Parallel: Fetch fresh content
+│        │ ┌─────────────────────────────────────┐
+│        │ │ InnerTubeAPI.getHomeFeed()          │
+│        │ │ Network call (async)                 │
+│        │ └─────────────────────────────────────┘
+│        │ ↓
+│        │ Sections returned:
+│        │ • Recommended mixes
+│        │ • New releases
+│        │ • Your playlists
+│        │ • Genre carousels
+│
+├─ T=500ms │ Parse & Transform
+│          │ ┌──────────────────────────────────┐
+│          │ │ Map response to HomeContent      │
+│          │ │ Extract:                         │
+│          │ │ • Song metadata                  │
+│          │ │ • Thumbnail URLs                 │
+│          │ │ • Carousel IDs                   │
+│          │ │ • Browse IDs                     │
+│          │ └──────────────────────────────────┘
+│
+├─ T=550ms │ Cache to Database
+│          │ ┌──────────────────────────────────┐
+│          │ │ DELETE FROM home_sections       │
+│          │ │ INSERT NEW sections              │
+│          │ │ UPDATE cache_timestamp           │
+│          │ └──────────────────────────────────┘
+│
+└─ T=600ms │ Update UI
+           │ ┌──────────────────────────────────┐
+           │ │ homeContent.emit(freshData)      │
+           │ │ Compose: LazyColumn recomposes   │
+           │ │ Smooth transition or replace?    │
+           │ └──────────────────────────────────┘
+           │
+           └─→ HOME SCREEN RENDERED with content
+```
+
+---
+
+## 7. Data Model Relationships (ER Diagram)
+
+```
+┌─────────────────┐         ┌──────────────┐
+│     Song        │◄───────►│    Album     │
+├─────────────────┤         ├──────────────┤
+│ id (PK)         │         │ id (PK)      │
+│ videoId         │         │ name         │
+│ title           │         │ artist       │
+│ artist          │         │ releaseDate  │
+│ duration        │         │ coverUrl     │
+│ albumId (FK)    │         └──────────────┘
+│ thumbnailUrl    │
+└─────────────────┘
+        │
+        │ many
+        │
+        ↓
+┌─────────────────┐         ┌──────────────┐
+│   Playlist      │◄───────►│ PlaylistSong │
+├─────────────────┤         ├──────────────┤
+│ id (PK)         │         │ id (PK)      │
+│ name            │         │ playlistId   │
+│ createdDate     │         │ songId       │
+│ isOffline       │         │ position     │
+│ description     │         └──────────────┘
+└─────────────────┘
+        │
+        │
+        ↓
+┌──────────────────────┐    ┌─────────────────┐
+│   Offline Download   │    │    Lyrics       │
+├──────────────────────┤    ├─────────────────┤
+│ id (PK)              │    │ id (PK)         │
+│ songId (FK)          │    │ songId (FK)     │
+│ localPath            │    │ content (JSON)  │
+│ downloadedDate       │    │ language        │
+│ fileSize             │    │ provider        │
+│ isComplete           │    │ isSynced        │
+└──────────────────────┘    └─────────────────┘
+        │
+        │
+        ↓
+┌──────────────────────┐
+│   PlayHistory        │
+├──────────────────────┤
+│ id (PK)              │
+│ songId (FK)          │
+│ playedDate           │
+│ duration (ms played) │
+│ skipped              │
+│ liked                │
+└──────────────────────┘
+```
+
+---
+
+## 8. Concurrent State Update Pattern
+
+```
+User Action Flow:
+│
+├─ User presses PAUSE button
+│  ↓
+│  ┌────────────────────────────┐
+│  │ PlayerViewModel            │
+│  │ onPauseClick()             │
+│  └──────────────┬─────────────┘
+│                 │
+│                 ↓
+│  ┌────────────────────────────┐
+│  │ Coroutine Scope            │
+│  │ launch {                   │
+│  │   // Non-blocking          │
+│  │ }                          │
+│  └──────────────┬─────────────┘
+│                 │
+│    ┌────────────┼────────────┐
+│    │            │            │
+│    ↓            ↓            ↓
+│  ┌──────┐    ┌──────┐    ┌──────────┐
+│  │Queue │    │Flow  │    │Player    │
+│  │State │    │State │    │Service   │
+│  │Update│    │Update│    │Command   │
+│  └──────┘    └──────┘    └──────────┘
+│    │            │            │
+│    └────────────┼────────────┘
+│                 │
+│                 ↓
+│  ┌────────────────────────────┐
+│  │ State changes propagated   │
+│  │ through StateFlow            │
+│  │ to multiple subscribers    │
+│  └──────────────┬─────────────┘
+│                 │
+│    ┌────────────┼────────────┐
+│    │            │            │
+│    ↓            ↓            ↓
+│  ┌──────┐    ┌──────┐    ┌──────────┐
+│  │ UI   │    │Service│   │Database  │
+│  │Update│    │Update │   │Persist   │
+│  └──────┘    └──────┘    └──────────┘
+```
+
+---
+
+## 9. API Rate Limiting & Caching Strategy
+
+```
+First Request Timeline
+│
+├─ T=0ms ┌─────────────────────────────────────┐
+│        │ Check Cache (Local DB)              │
+│        │ if (cache exists AND valid)         │
+│        │   return cached_data                │
+│        │ else                                │
+│        │   goto network_request              │
+│        └──────────────────────────────────────┘
+│
+├─ T=1ms ┌─────────────────────────────────────┐
+│        │ Network Request Queued              │
+│        │ (Retrofit + OkHttp interceptor)     │
+│        │ Check rate limiting:                │
+│        │ if (requests > limit)               │
+│        │   delay(backoff_ms)                 │
+│        └──────────────────────────────────────┘
+│
+├─ T=50ms ┌─────────────────────────────────────┐
+│         │ Network Request Sent                │
+│         │ POST /youtubei/v1/...              │
+│         │ Timeout: 30s                       │
+│         └──────────────────────────────────────┘
+│
+├─ T=500ms ┌─────────────────────────────────────┐
+│          │ Response Received                  │
+│          │ Parse JSON                         │
+│          │ Validate response                  │
+│          │ if (error) → fallback to cache    │
+│          └──────────────────────────────────────┘
+│
+├─ T=600ms ┌─────────────────────────────────────┐
+│          │ Save to Cache                      │
+│          │ Database transaction:              │
+│          │ DELETE old cache                   │
+│          │ INSERT new data                    │
+│          │ SET cache_timestamp                │
+│          │ SET cache_valid = true             │
+│          └──────────────────────────────────────┘
+│
+└─ T=650ms └─► Return to UI (emit StateFlow)
+              Fresh data displayed!
+
+Subsequent Request (Cache Hit):
+│
+├─ T=0ms ┌─────────────────────────────────────┐
+│        │ Check Cache                         │
+│        │ if (now - cache_timestamp < 30min) │
+│        │   return IMMEDIATELY                │
+│        │ else                                │
+│        │   refresh in background             │
+│        │   return cached_data meanwhile      │
+│        └──────────────────────────────────────┘
+│
+└─ T=1ms ───► Instant display (< 1ms latency!)
+```
+
+---
+
+## 10. Offline-First Pattern
+
+```
+┌──────────────────────────────────────────┐
+│        APP STATE                         │
+│  ┌──────────┐    ┌──────────┐          │
+│  │ ONLINE   │    │ OFFLINE  │          │
+│  └──────────┘    └──────────┘          │
+└──────────────────────────────────────────┘
+         │                 │
+         │                 │
+ONLINE STATE:         OFFLINE STATE:
+│                     │
+├─ Fetch from API    ├─ Read from Cache only
+├─ Cache results     ├─ Queue operations
+├─ Sync offline ops  ├─ Sync when online
+├─ Update data       ├─ Show cached data
+│                    └─ Warn if not available
+│
+Network Detection:
+│
+   ┌─────────────────────────────────┐
+   │ NetworkManager                  │
+   │ (Observes ConnectivityManager)  │
+   └─────────────────┬───────────────┘
+                     │
+        ┌────────────┼────────────┐
+        │            │            │
+        ↓            ↓            ↓
+   ┌───────┐    ┌───────┐    ┌────────┐
+   │Online │    │Offline│    │Changed │
+   │Event  │    │Event  │    │Event   │
+   └───┬───┘    └───┬───┘    └───┬────┘
+       │            │            │
+       ├────────────┼────────────┘
+       │            │
+       ↓            ↓
+  ┌──────────┐ ┌──────────┐
+  │Emit Evt  │ │Emit Evt  │
+  └────┬─────┘ └────┬─────┘
+       │             │
+       ↓             ↓
+  Listeners respond to network state
+  └─ Retry failed ops
+  └─ Show/hide sync indicators
+  └─ Enable/disable features
+```
+
+---
+
+Dokumentasi ini memberikan gambaran visual lengkap tentang bagaimana Echo Music bekerja dari berbagai perspektif arsitektur, data flow, dan user interaction patterns.
+
